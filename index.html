@@ -1,0 +1,382 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ApexENEM • Revisão Espaçada</title>
+  <meta name="theme-color" content="#7c3aed">
+  <meta name="description" content="ApexENEM: organize estudos, revisões espaçadas, progresso e caderno de erros para o ENEM.">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="ApexENEM">
+  <link rel="manifest" href="./manifest.json">
+  <link rel="icon" type="image/png" sizes="192x192" href="./icons/icon-192.png">
+  <link rel="apple-touch-icon" href="./icons/icon-192.png">
+  <link rel="stylesheet" href="./css/style.css">
+  <link rel="stylesheet" href="./css/schedule.css">
+  <script src="https://unpkg.com/@phosphor-icons/web"></script>
+</head>
+<body>
+  <div class="offline-banner hidden" id="offlineBanner" hidden>
+    <i class="ph ph-wifi-slash"></i>
+    <span>Você está offline, mas pode continuar estudando. Lembre de exportar um backup depois.</span>
+    <button type="button" id="offlineBannerClose" aria-label="Fechar aviso">×</button>
+  </div>
+
+  <button class="sidebar-toggle" id="sidebarToggle" type="button" aria-label="Abrir menu">
+    <i class="ph ph-list"></i>
+  </button>
+
+  <div class="app-shell">
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-header">
+        <div class="brand"><i class="ph ph-rocket-fill"></i></div>
+        <div class="brand-title">
+          <strong>ApexENEM</strong>
+          <small>Revisão espaçada</small>
+        </div>
+      </div>
+
+      <div class="sidebar-summary">
+        <div class="summary-row"><span>Total de itens</span><strong id="summaryTotal">0</strong></div>
+        <div class="summary-row"><span>Pendentes hoje</span><strong id="summaryToday">0</strong></div>
+        <div class="summary-row"><span>Dominados</span><strong id="summaryMastered">0</strong></div>
+        <div class="summary-row"><span>Backlog</span><strong id="summaryBacklog">0</strong></div>
+        <div class="summary-row"><span>Erros salvos</span><strong id="summaryErrors">0</strong></div>
+      </div>
+
+      <div class="sidebar-section">
+        <h2>Matérias</h2>
+        <div class="subject-list" id="subjectList"></div>
+      </div>
+
+      <div class="sidebar-footer">
+        <button class="btn-soft" id="btnAdd" type="button"><i class="ph ph-plus-circle"></i> Adicionar item</button>
+        <button class="btn-soft" id="btnImportTxt" type="button"><i class="ph ph-file-text"></i> Importar lista TXT</button>
+        <button class="btn-soft" id="btnImportJson" type="button"><i class="ph ph-upload-simple"></i> Carregar progresso salvo</button>
+        <button class="btn-soft" id="btnExportJson" type="button"><i class="ph ph-download-simple"></i> Salvar meu progresso</button>
+        <button class="btn-soft" id="btnReport" type="button"><i class="ph ph-chart-line-up"></i> Exportar relatório</button>
+        <button class="btn-soft" id="btnManual" type="button"><i class="ph ph-question"></i> Como usar</button>
+        <button class="btn-danger" id="btnSafeClear" type="button"><i class="ph ph-shield-warning"></i> Limpar cache com segurança</button>
+        <button class="btn-danger" id="btnReset" type="button"><i class="ph ph-trash"></i> Resetar dados</button>
+      </div>
+    </aside>
+
+    <main class="content-area">
+      <header class="topbar">
+        <div class="topbar-left">
+          <div class="topbar-title">
+            <strong id="mainTitle">Dashboard de Revisão Espaçada</strong>
+            <span id="mainSubtitle">Organize matérias, tópicos e revisões ENEM</span>
+          </div>
+          <button class="view-pill view-pill-button" id="currentViewLabel" type="button">Todas as revisões</button>
+        </div>
+
+        <div class="topbar-actions">
+          <button class="btn btn-primary btn-study-today" id="btnStudyToday" type="button"><i class="ph ph-lightning-fill"></i> Estudar hoje</button>
+          <button class="btn btn-soft" id="btnSchedule" type="button"><i class="ph ph-calendar-check"></i> Cronograma</button>
+          <button class="btn btn-soft" id="btnWeeklyPlan" type="button"><i class="ph ph-calendar-plus"></i> Plano da semana</button>
+          <button class="btn btn-soft" id="btnSimulations" type="button"><i class="ph ph-exam"></i> Simulados</button>
+          <button class="btn btn-soft btn-final-mode" id="btnFinalMode" type="button"><i class="ph ph-flag-checkered"></i> Reta final</button>
+          <button class="btn btn-soft" id="btnTiredMode" type="button"><i class="ph ph-battery-low"></i> Hoje estou cansado</button>
+          <button class="btn btn-soft" id="btnErrorNotebook" type="button"><i class="ph ph-notebook"></i> Caderno de erros</button>
+          <label class="daily-limit-control" for="dailyLimitSelect">
+            <span>Meta diária</span>
+            <select id="dailyLimitSelect">
+              <option value="1">1 revisão</option>
+              <option value="3" selected>3 revisões</option>
+              <option value="5">5 revisões</option>
+            </select>
+          </label>
+          <button class="btn btn-soft" id="btnFocusMode" type="button"><i class="ph ph-crosshair"></i> Modo foco</button>
+          <button class="btn btn-soft" id="btnCalendar" type="button"><i class="ph ph-calendar-dots"></i> Calendário</button>
+          <button class="btn btn-soft" id="highPriorityToggle" type="button"><i class="ph ph-star"></i> Prioridades altas</button>
+          <button class="btn btn-primary" id="btnNew" type="button"><i class="ph ph-plus-circle"></i> Novo subassunto</button>
+        </div>
+      </header>
+
+      <section class="filters-row">
+        <div class="search-field">
+          <i class="ph ph-magnifying-glass"></i>
+          <input type="search" id="searchInput" placeholder="Pesquisar..."/>
+          <div class="search-suggestions hidden" id="searchSuggestions" hidden></div>
+        </div>
+        <select id="subjectFilter"><option value="all">Todas as matérias</option></select>
+        <select id="priorityFilter">
+          <option value="all">Todas as prioridades</option>
+          <option value="Alta">Alta</option>
+          <option value="Média">Média</option>
+          <option value="Baixa">Baixa</option>
+          <option value="Muito Baixa">Muito Baixa</option>
+        </select>
+        <select id="reviewFilter"><option value="all">Todas as revisões</option></select>
+        <select id="statusFilter">
+          <option value="all">Todos os status</option>
+          <option value="não iniciado">Não iniciado</option>
+          <option value="revisão hoje">Revisão hoje</option>
+          <option value="agendado">Agendado</option>
+          <option value="atrasado">Atrasado</option>
+          <option value="dominado">Dominado</option>
+        </select>
+      </section>
+
+      <section class="subject-progress-area" id="subjectProgressArea"></section>
+
+      <section class="cards-zone">
+        <div class="cards-zone-header">
+          <div>
+            <h2 class="section-title"><i class="ph ph-squares-four"></i> <span id="cardsTitle">Todos os subassuntos</span></h2>
+            <small id="cardsSubtitle">Use filtros para navegar rapidamente.</small>
+          </div>
+        </div>
+        <div id="cardsContainer" class="cards-grid"></div>
+      </section>
+    </main>
+  </div>
+
+  <div class="modal-overlay hidden" id="itemModal" hidden>
+    <div class="modal-card">
+      <h3 id="modalHeading">Adicionar novo subassunto</h3>
+      <div class="modal-body">
+        <div class="field"><label>Matéria</label><input id="modalSubject" placeholder="Ex: Física"/></div>
+        <div class="field"><label>Tópico</label><input id="modalTopic" placeholder="Ex: Eletrodinâmica (21%)"/></div>
+        <div class="field"><label>Subassunto</label><input id="modalSubtopic" placeholder="Ex: Lei de Ohm"/></div>
+        <div class="field">
+          <label>Prioridade</label>
+          <select id="modalPriority">
+            <option>Alta</option>
+            <option>Média</option>
+            <option>Baixa</option>
+            <option>Muito Baixa</option>
+          </select>
+        </div>
+        <div class="field"><label>Tags extras</label><input id="modalTags" placeholder="Ex: Fórmula, ENEM"/></div>
+        <div class="modal-actions">
+          <button class="btn btn-soft" id="modalCancel" type="button">Cancelar</button>
+          <button class="btn btn-primary" id="modalSave" type="button">Salvar</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="focus-overlay hidden" id="focusOverlay" hidden></div>
+
+  <div class="modal-overlay error-notebook-modal hidden" id="errorNotebookModal" hidden>
+    <div class="modal-card error-notebook-card">
+      <div class="modal-title-row">
+        <div>
+          <h3>Caderno de erros</h3>
+          <small>Salve erros de questões e a correção para revisar depois.</small>
+        </div>
+        <button class="btn btn-soft" id="errorNotebookClose" type="button"><i class="ph ph-x"></i> Fechar</button>
+      </div>
+
+      <div class="error-form-grid">
+        <div class="field"><label>Matéria</label><input id="errorSubject" placeholder="Ex: Física"/></div>
+        <div class="field"><label>Tópico</label><input id="errorTopic" placeholder="Ex: Eletrodinâmica"/></div>
+        <div class="field field-wide"><label>Erro cometido</label><textarea id="errorMistake" placeholder="Ex: Confundi potência elétrica com energia elétrica"></textarea></div>
+        <div class="field field-wide"><label>Correção / Como lembrar</label><textarea id="errorCorrection" placeholder="Ex: Potência é energia por tempo: P = E/t"></textarea></div>
+        <div class="field field-wide"><label>Tags</label><input id="errorTags" placeholder="Ex: fórmula, cálculo, atenção"/></div>
+      </div>
+
+      <div class="modal-actions">
+        <button class="btn btn-soft" id="errorNotebookClearForm" type="button">Limpar</button>
+        <button class="btn btn-primary" id="errorNotebookSave" type="button"><i class="ph ph-floppy-disk"></i> Salvar erro</button>
+      </div>
+
+      <div class="error-notes-area">
+        <div class="error-notes-header">
+          <strong>Erros salvos</strong>
+          <small id="errorNotesCount">0 itens</small>
+        </div>
+        <div id="errorNotesList" class="error-notes-list"></div>
+      </div>
+    </div>
+  </div>
+
+
+  <div class="modal-overlay report-modal hidden" id="reportModal" hidden>
+    <div class="modal-card report-card">
+      <div class="modal-title-row">
+        <div>
+          <h3>Relatório de progresso</h3>
+          <small>Resumo simples da sua semana no ApexENEM.</small>
+        </div>
+        <button class="btn btn-soft" id="reportClose" type="button"><i class="ph ph-x"></i> Fechar</button>
+      </div>
+      <div id="reportContent" class="report-content"></div>
+      <div class="modal-actions">
+        <button class="btn btn-soft" id="reportDownloadTxt" type="button"><i class="ph ph-file-text"></i> Baixar TXT</button>
+        <button class="btn btn-primary" id="reportDownloadJson" type="button"><i class="ph ph-download-simple"></i> Baixar JSON</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-overlay manual-modal hidden" id="manualModal" hidden>
+    <div class="modal-card manual-card">
+      <div class="modal-title-row">
+        <div>
+          <h3>Como usar o ApexENEM</h3>
+          <small>Guia rápido para estudar sem perder progresso.</small>
+        </div>
+        <button class="btn btn-soft" id="manualClose" type="button"><i class="ph ph-x"></i> Fechar</button>
+      </div>
+      <div class="manual-content">
+        <section>
+          <h4>1. Dashboard</h4>
+          <p>O Dashboard mostra a visão geral do estudo: total de itens, revisões pendentes, itens dominados, backlog e progresso.</p>
+        </section>
+        <section>
+          <h4>2. Matérias</h4>
+          <p>As matérias organizam o conteúdo principal, como Física, Matemática, Química e Biologia.</p>
+        </section>
+        <section>
+          <h4>3. Tópicos</h4>
+          <p>Cada matéria é dividida em tópicos, como Eletrodinâmica, Termologia, Ondulatória e Cinemática.</p>
+        </section>
+        <section>
+          <h4>4. Subassuntos</h4>
+          <p>Subassuntos são os itens específicos que você estuda e revisa, como Lei de Ohm, Potência elétrica e Efeito Doppler.</p>
+        </section>
+        <section>
+          <h4>5. Prioridades</h4>
+          <p><strong>Alta</strong> vem primeiro. <strong>Média</strong> vem depois. <strong>Baixa</strong> só entra se sobrar tempo. <strong>Muito Baixa</strong> é para tempo extra.</p>
+        </section>
+        <section>
+          <h4>6. Revisão espaçada</h4>
+          <p>O ApexENEM agenda quando você deve revisar: R0 é inicial, R1/R2/R3 são revisões e Dominado é conteúdo consolidado.</p>
+        </section>
+        <section>
+          <h4>7. Botão Revisado</h4>
+          <p>Clique em <strong>Revisado</strong> depois de estudar. O item sobe de nível e a próxima revisão é marcada automaticamente.</p>
+        </section>
+        <section>
+          <h4>8. Botão Desfazer</h4>
+          <p>Use quando clicar errado em Revisado. Ele volta a última revisão daquele item.</p>
+        </section>
+        <section>
+          <h4>9. Botão Editar</h4>
+          <p>Permite alterar matéria, tópico, subassunto, prioridade e tags.</p>
+        </section>
+        <section>
+          <h4>10. Botão Excluir</h4>
+          <p>Remove um subassunto do sistema. Use com cuidado.</p>
+        </section>
+        <section>
+          <h4>11. Filtros</h4>
+          <p>Use os filtros para achar conteúdos por matéria, prioridade, status, revisão ou texto pesquisado.</p>
+        </section>
+        <section>
+          <h4>12. Prioridades altas</h4>
+          <p>Mostra só os conteúdos de prioridade alta. Use quando tiver pouco tempo e quiser focar no que mais importa.</p>
+        </section>
+        <section>
+          <h4>13. Importar TXT</h4>
+          <p>Permite importar uma lista de conteúdos por arquivo de texto.</p>
+        </section>
+        <section>
+          <h4>14. Exportar JSON</h4>
+          <p>Cria um backup do seu progresso. Guarde esse arquivo em uma pasta segura.</p>
+        </section>
+        <section>
+          <h4>15. Resetar dados</h4>
+          <p>Reseta o app para a base inicial. Antes disso, prefira usar <strong>Limpar cache com segurança</strong>.</p>
+        </section>
+        <section>
+          <h4>16. Cronograma</h4>
+          <p>Organiza sua semana com base nos dias disponíveis, horas por dia, data da prova, prioridade, revisões e erros.</p>
+        </section>
+        <section>
+          <h4>17. Backlog</h4>
+          <p>Backlog é o que não coube na semana. O conteúdo não foi apagado; só ficou fora do plano por limite de tempo.</p>
+        </section>
+        <section>
+          <h4>18. Modo emergência</h4>
+          <p>Quando acumula muita coisa, o cronograma foca no essencial: atrasados, prioridade alta, erros e R0/R1/R2.</p>
+        </section>
+        <section>
+          <h4>19. Modo reta final</h4>
+          <p>Use perto da prova. Ele destaca prioridade alta, atrasados, erros salvos, R0/R1/R2 e itens ainda não dominados.</p>
+        </section>
+        <section>
+          <h4>20. PWA/App instalável</h4>
+          <p>Quando hospedado em HTTPS, você pode instalar o ApexENEM como app no PC ou adicionar à tela inicial do celular.</p>
+        </section>
+        <section>
+          <h4>21. Backup e segurança</h4>
+          <p>Para não perder progresso: exporte JSON, guarde o backup, restaure quando precisar e evite limpar cache sem salvar.</p>
+        </section>
+      </div>
+    </div>
+  </div>
+
+
+
+  <div class="modal-overlay weekly-plan-modal hidden" id="weeklyPlanModal" hidden>
+    <div class="modal-card weekly-plan-card">
+      <div class="modal-title-row">
+        <div>
+          <h3>Plano da semana</h3>
+          <small>Uma visão simples para não depender só da motivação do dia.</small>
+        </div>
+        <button class="btn btn-soft" id="weeklyPlanClose" type="button"><i class="ph ph-x"></i> Fechar</button>
+      </div>
+      <div class="weekly-plan-actions">
+        <button class="btn btn-primary" id="weeklyPlanGenerate" type="button"><i class="ph ph-arrows-clockwise"></i> Gerar plano</button>
+        <button class="btn btn-soft" id="weeklyPlanDownload" type="button"><i class="ph ph-file-text"></i> Baixar TXT</button>
+      </div>
+      <div id="weeklyPlanContent" class="weekly-plan-content"></div>
+    </div>
+  </div>
+
+  <div class="modal-overlay simulations-modal hidden" id="simulationsModal" hidden>
+    <div class="modal-card simulations-card">
+      <div class="modal-title-row">
+        <div>
+          <h3>Simulados</h3>
+          <small>Registre seus resultados e veja onde está perdendo pontos.</small>
+        </div>
+        <button class="btn btn-soft" id="simulationsClose" type="button"><i class="ph ph-x"></i> Fechar</button>
+      </div>
+
+      <div class="simulation-form-grid">
+        <div class="field"><label>Data</label><input id="simDate" type="date"></div>
+        <div class="field"><label>Matéria</label><input id="simSubject" placeholder="Ex: Física"></div>
+        <div class="field"><label>Acertos</label><input id="simCorrect" type="number" min="0" placeholder="Ex: 28"></div>
+        <div class="field"><label>Erros</label><input id="simWrong" type="number" min="0" placeholder="Ex: 12"></div>
+        <div class="field"><label>Nota estimada</label><input id="simScore" placeholder="Ex: 720"></div>
+        <div class="field field-wide"><label>Assuntos que errei</label><textarea id="simTopics" placeholder="Ex: Lei de Ohm, calor específico, efeito Doppler"></textarea></div>
+      </div>
+
+      <div class="modal-actions">
+        <button class="btn btn-soft" id="simClear" type="button">Limpar</button>
+        <button class="btn btn-primary" id="simSave" type="button"><i class="ph ph-floppy-disk"></i> Salvar simulado</button>
+      </div>
+
+      <div class="simulations-area">
+        <div class="simulations-header">
+          <strong>Registros salvos</strong>
+          <small id="simCount">0 itens</small>
+        </div>
+        <div id="simulationsList" class="simulations-list"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast" id="toastContainer" hidden>
+    <span id="toastText">Ação concluída.</span>
+  </div>
+
+  <input type="file" id="jsonImportFile" accept="application/json,.json" style="display:none" />
+
+  <script type="module" src="./js/main.js"></script>
+  <script type="module" src="./js/components/scheduleView.js"></script>
+  <script>
+    if ('serviceWorker' in navigator && location.protocol !== 'file:') {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('./service-worker.js').catch(() => {});
+      });
+    }
+  </script>
+</body>
+</html>
