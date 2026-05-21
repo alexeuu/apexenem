@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>ApexENEM • Revisão Espaçada</title>
+  <title>ApexENEM • Revisões</title>
   <meta name="theme-color" content="#7c3aed">
   <meta name="description" content="ApexENEM: organize estudos, revisões espaçadas, progresso e caderno de erros para o ENEM.">
   <meta name="apple-mobile-web-app-capable" content="yes">
@@ -13,8 +13,6 @@
   <link rel="icon" type="image/png" sizes="192x192" href="./icons/icon-192.png">
   <link rel="apple-touch-icon" href="./icons/icon-192.png">
   <link rel="stylesheet" href="./css/style.css">
-  <link rel="stylesheet" href="./css/schedule.css">
-  <script src="https://unpkg.com/@phosphor-icons/web"></script>
 </head>
 <body>
   <div class="offline-banner hidden" id="offlineBanner" hidden>
@@ -30,10 +28,10 @@
   <div class="app-shell">
     <aside class="sidebar" id="sidebar">
       <div class="sidebar-header">
-        <div class="brand"><i class="ph ph-rocket-fill"></i></div>
+        <div class="brand brand-logo"><img src="./icons/icon-192.png" alt="Logo ApexENEM"></div>
         <div class="brand-title">
           <strong>ApexENEM</strong>
-          <small>Revisão espaçada</small>
+          <small>Revisões • versão corrigida</small>
         </div>
       </div>
 
@@ -41,7 +39,7 @@
         <div class="summary-row"><span>Total de itens</span><strong id="summaryTotal">0</strong></div>
         <div class="summary-row"><span>Pendentes hoje</span><strong id="summaryToday">0</strong></div>
         <div class="summary-row"><span>Dominados</span><strong id="summaryMastered">0</strong></div>
-        <div class="summary-row"><span>Backlog</span><strong id="summaryBacklog">0</strong></div>
+        <div class="summary-row"><span>Fora da fila</span><strong id="summaryBacklog">0</strong></div>
         <div class="summary-row"><span>Erros salvos</span><strong id="summaryErrors">0</strong></div>
       </div>
 
@@ -74,8 +72,6 @@
 
         <div class="topbar-actions">
           <button class="btn btn-primary btn-study-today" id="btnStudyToday" type="button"><i class="ph ph-lightning-fill"></i> Estudar hoje</button>
-          <button class="btn btn-soft" id="btnSchedule" type="button"><i class="ph ph-calendar-check"></i> Cronograma</button>
-          <button class="btn btn-soft" id="btnWeeklyPlan" type="button"><i class="ph ph-calendar-plus"></i> Plano da semana</button>
           <button class="btn btn-soft" id="btnSimulations" type="button"><i class="ph ph-exam"></i> Simulados</button>
           <button class="btn btn-soft btn-final-mode" id="btnFinalMode" type="button"><i class="ph ph-flag-checkered"></i> Reta final</button>
           <button class="btn btn-soft" id="btnTiredMode" type="button"><i class="ph ph-battery-low"></i> Hoje estou cansado</button>
@@ -118,6 +114,7 @@
           <option value="atrasado">Atrasado</option>
           <option value="dominado">Dominado</option>
         </select>
+        <button class="btn btn-soft" id="btnShowAll" type="button"><i class="ph ph-funnel-x"></i> Mostrar tudo</button>
       </section>
 
       <section class="subject-progress-area" id="subjectProgressArea"></section>
@@ -224,7 +221,7 @@
       <div class="manual-content">
         <section>
           <h4>1. Dashboard</h4>
-          <p>O Dashboard mostra a visão geral do estudo: total de itens, revisões pendentes, itens dominados, backlog e progresso.</p>
+          <p>O Dashboard mostra a visão geral do estudo: total de itens, revisões pendentes, itens dominados, itens fora da fila diária e progresso.</p>
         </section>
         <section>
           <h4>2. Matérias</h4>
@@ -283,27 +280,15 @@
           <p>Reseta o app para a base inicial. Antes disso, prefira usar <strong>Limpar cache com segurança</strong>.</p>
         </section>
         <section>
-          <h4>16. Cronograma</h4>
-          <p>Organiza sua semana com base nos dias disponíveis, horas por dia, data da prova, prioridade, revisões e erros.</p>
-        </section>
-        <section>
-          <h4>17. Backlog</h4>
-          <p>Backlog é o que não coube na semana. O conteúdo não foi apagado; só ficou fora do plano por limite de tempo.</p>
-        </section>
-        <section>
-          <h4>18. Modo emergência</h4>
-          <p>Quando acumula muita coisa, o cronograma foca no essencial: atrasados, prioridade alta, erros e R0/R1/R2.</p>
-        </section>
-        <section>
-          <h4>19. Modo reta final</h4>
+          <h4>16. Modo reta final</h4>
           <p>Use perto da prova. Ele destaca prioridade alta, atrasados, erros salvos, R0/R1/R2 e itens ainda não dominados.</p>
         </section>
         <section>
-          <h4>20. PWA/App instalável</h4>
+          <h4>17. PWA/App instalável</h4>
           <p>Quando hospedado em HTTPS, você pode instalar o ApexENEM como app no PC ou adicionar à tela inicial do celular.</p>
         </section>
         <section>
-          <h4>21. Backup e segurança</h4>
+          <h4>18. Backup e segurança</h4>
           <p>Para não perder progresso: exporte JSON, guarde o backup, restaure quando precisar e evite limpar cache sem salvar.</p>
         </section>
       </div>
@@ -311,23 +296,6 @@
   </div>
 
 
-
-  <div class="modal-overlay weekly-plan-modal hidden" id="weeklyPlanModal" hidden>
-    <div class="modal-card weekly-plan-card">
-      <div class="modal-title-row">
-        <div>
-          <h3>Plano da semana</h3>
-          <small>Uma visão simples para não depender só da motivação do dia.</small>
-        </div>
-        <button class="btn btn-soft" id="weeklyPlanClose" type="button"><i class="ph ph-x"></i> Fechar</button>
-      </div>
-      <div class="weekly-plan-actions">
-        <button class="btn btn-primary" id="weeklyPlanGenerate" type="button"><i class="ph ph-arrows-clockwise"></i> Gerar plano</button>
-        <button class="btn btn-soft" id="weeklyPlanDownload" type="button"><i class="ph ph-file-text"></i> Baixar TXT</button>
-      </div>
-      <div id="weeklyPlanContent" class="weekly-plan-content"></div>
-    </div>
-  </div>
 
   <div class="modal-overlay simulations-modal hidden" id="simulationsModal" hidden>
     <div class="modal-card simulations-card">
@@ -368,15 +336,19 @@
   </div>
 
   <input type="file" id="jsonImportFile" accept="application/json,.json" style="display:none" />
-
-  <script type="module" src="./js/main.js"></script>
-  <script type="module" src="./js/components/scheduleView.js"></script>
   <script>
-    if ('serviceWorker' in navigator && location.protocol !== 'file:') {
-      window.addEventListener('load', () => {
-        navigator.serviceWorker.register('./service-worker.js').catch(() => {});
-      });
-    }
+    // Remove service workers/caches antigos que podiam travar botões após trocar os arquivos.
+    (function(){
+      try {
+        if ('serviceWorker' in navigator) {
+          navigator.serviceWorker.getRegistrations().then(function(regs){ regs.forEach(function(reg){ reg.unregister(); }); });
+        }
+        if (window.caches) {
+          caches.keys().then(function(keys){ return Promise.all(keys.map(function(key){ return caches.delete(key); })); });
+        }
+      } catch (_) {}
+    })();
   </script>
+  <script src="./js/app.bundle.js?v=6"></script>
 </body>
 </html>

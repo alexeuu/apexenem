@@ -11,7 +11,7 @@ const seedData = [
   { subject: 'Física', topic: 'Eletrodinâmica', topicWeight: '21%', priority: 'Alta', title: 'Lei de Ohm', currentLevel: 0, status: 'Não iniciado', nextRevisionDate: null },
   { subject: 'Física', topic: 'Eletrodinâmica', topicWeight: '21%', priority: 'Alta', title: 'Potência no resistor', currentLevel: 0, status: 'Não iniciado', nextRevisionDate: null },
   { subject: 'Física', topic: 'Eletrodinâmica', topicWeight: '21%', priority: 'Alta', title: 'Associação de resistores em série', currentLevel: 0, status: 'Não iniciado', nextRevisionDate: null },
-  { subject: 'Física', topic: 'Eletrodinâmica', topicWeight: '21%', priority: 'Alta', title: 'Associação de resistores in paralelo', currentLevel: 0, status: 'Não iniciado', nextRevisionDate: null },
+  { subject: 'Física', topic: 'Eletrodinâmica', topicWeight: '21%', priority: 'Alta', title: 'Associação de resistores em paralelo', currentLevel: 0, status: 'Não iniciado', nextRevisionDate: null },
   { subject: 'Física', topic: 'Eletrodinâmica', topicWeight: '21%', priority: 'Alta', title: 'Associação mista de resistores', currentLevel: 0, status: 'Não iniciado', nextRevisionDate: null },
   { subject: 'Física', topic: 'Eletrodinâmica', topicWeight: '21%', priority: 'Alta', title: 'Revisão de eletrodinâmica', currentLevel: 0, status: 'Não iniciado', nextRevisionDate: null },
   

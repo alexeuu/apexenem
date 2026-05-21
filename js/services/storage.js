@@ -7,9 +7,7 @@ const LEGACY_HISTORY_KEY = LEGACY_STORAGE_KEY + '_history';
 const OPEN_TOPICS_KEY = STORAGE_KEY + '_open_topics';
 const DAILY_QUEUE_KEY = STORAGE_KEY + '_daily_review_queue';
 const ERROR_NOTES_KEY = STORAGE_KEY + '_error_notes';
-const DAILY_NEW_SUBJECT_KEY = STORAGE_KEY + '_daily_new_subject';
 const SIMULATIONS_KEY = STORAGE_KEY + '_simulations';
-const WEEKLY_PLAN_KEY = STORAGE_KEY + '_weekly_plan';
 
 function safeGet(key, fallback = null) {
   try {
@@ -167,20 +165,6 @@ export function clearErrorNotes() {
 }
 
 
-export function loadDailyNewSubject() {
-  const item = safeGet(DAILY_NEW_SUBJECT_KEY, null);
-  return item && typeof item === 'object' ? item : null;
-}
-
-export function saveDailyNewSubject(item) {
-  safeSet(DAILY_NEW_SUBJECT_KEY, item || null);
-}
-
-export function clearDailyNewSubject() {
-  try {
-    localStorage.removeItem(DAILY_NEW_SUBJECT_KEY);
-  } catch (_) {}
-}
 
 
 export function loadSimulations() {
@@ -203,18 +187,6 @@ export function deleteSimulation(simulationId) {
   saveSimulations(loadSimulations().filter(sim => sim.id !== simulationId));
 }
 
-export function loadWeeklyPlan() {
-  const plan = safeGet(WEEKLY_PLAN_KEY, null);
-  return plan && typeof plan === 'object' ? plan : null;
-}
-
-export function saveWeeklyPlan(plan) {
-  safeSet(WEEKLY_PLAN_KEY, plan || null);
-}
-
-export function clearWeeklyPlan() {
-  try { localStorage.removeItem(WEEKLY_PLAN_KEY); } catch (_) {}
-}
 
 export function clearAll() {
   try {
@@ -224,8 +196,6 @@ export function clearAll() {
     localStorage.removeItem(OPEN_TOPICS_KEY);
     localStorage.removeItem(DAILY_QUEUE_KEY);
     localStorage.removeItem(ERROR_NOTES_KEY);
-    localStorage.removeItem(DAILY_NEW_SUBJECT_KEY);
     localStorage.removeItem(SIMULATIONS_KEY);
-    localStorage.removeItem(WEEKLY_PLAN_KEY);
   } catch (_) {}
 }

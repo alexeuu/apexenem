@@ -1,3 +1,664 @@
+/* ApexENEM revisões - bundle sem módulos para abrir direto no navegador */
+
+(function ApexEmergencyBoot(){
+  window.__APEX_VERSION__ = 'revisoes-final-funcionando-v4';
+  window.addEventListener('error', function(event) {
+    try {
+      var box = document.getElementById('apexBootError');
+      if (!box) {
+        box = document.createElement('div');
+        box.id = 'apexBootError';
+        box.style.cssText = 'position:fixed;left:12px;right:12px;bottom:12px;z-index:99999;background:#7f1d1d;color:white;padding:12px 14px;border-radius:12px;font:14px system-ui;box-shadow:0 12px 40px rgba(0,0,0,.35)';
+        if (document.body) document.body.appendChild(box);
+        else document.addEventListener('DOMContentLoaded', function(){ document.body.appendChild(box); });
+      }
+      box.textContent = 'Erro no app: ' + (event.message || 'erro desconhecido') + '. Recarregue usando ABRIR_AQUI_LIMPA_CACHE.html.';
+    } catch (_) {}
+  });
+})();
+
+// utils/filters.js
+function normalizePriority(priority) {
+  if (priority === 'Very Baixa') return 'Muito Baixa';
+  if (priority === 'Muito Baixa') return 'Muito Baixa';
+  if (priority === 'Alta') return 'Alta';
+  if (priority === 'Média') return 'Média';
+  if (priority === 'Baixa') return 'Baixa';
+  return 'Média';
+}
+
+function getPriorityTagLabel(priority) {
+  const p = normalizePriority(priority);
+  if (p === 'Alta') return 'Cai muito';
+  if (p === 'Média') return 'Cai médio';
+  return 'Quase não cai';
+}
+
+function sanitizeTags(tags, priority) {
+  if (!Array.isArray(tags)) return [];
+
+  const prioText = normalizePriority(priority).toLowerCase();
+  const prioLabel = getPriorityTagLabel(priority).toLowerCase();
+  const seen = new Set();
+  const out = [];
+
+  tags.forEach(t => {
+    if (!t) return;
+    const tag = t.toString().trim();
+    if (!tag) return;
+    if (tag.toLowerCase() === prioText) return;
+
+    const key = tag.toLowerCase();
+    if (!seen.has(key)) {
+      seen.add(key);
+      out.push(tag);
+    }
+  });
+
+  if (!out.some(t => t.toLowerCase() === prioLabel)) {
+    out.unshift(getPriorityTagLabel(priority));
+  } else {
+    out.sort((a, b) =>
+      a.toLowerCase() === prioLabel
+        ? -1
+        : b.toLowerCase() === prioLabel
+          ? 1
+          : 0
+    );
+  }
+
+  return out;
+}
+
+function normalizeText(s) {
+  return String(s || '').trim();
+}
+
+function sameDay(a, b) {
+  return (
+    a.getFullYear() === b.getFullYear() &&
+    a.getMonth() === b.getMonth() &&
+    a.getDate() === b.getDate()
+  );
+}
+
+function getSubStatus(sub, now = new Date()) {
+  if (Number(sub.currentLevel) >= 8) return 'dominado';
+  if (!sub.nextReviewDate) return 'não iniciado';
+
+  const next = new Date(sub.nextReviewDate);
+  const todayStart = new Date(now);
+  todayStart.setHours(0, 0, 0, 0);
+
+  const nextStart = new Date(next);
+  nextStart.setHours(0, 0, 0, 0);
+
+  if (nextStart.getTime() < todayStart.getTime()) return 'atrasado';
+  if (sameDay(next, now)) return 'revisão hoje';
+  return 'agendado';
+}
+
+function isDueTodayOrOverdue(sub, now = new Date()) {
+  const status = getSubStatus(sub, now);
+  return status === 'atrasado' || status === 'revisão hoje';
+}
+
+function isHighNotStarted(sub) {
+  return normalizePriority(sub.priority) === 'Alta' && !sub.nextReviewDate && Number(sub.currentLevel) < 8;
+}
+
+function filterSubjects(subjects, filters = {}, view = 'all') {
+  const now = new Date();
+  const search = (filters.search || '').toLowerCase();
+  const groups = [];
+
+  subjects.forEach(subject => {
+    if (filters.subject && filters.subject !== 'all' && filters.subject !== subject.name) return;
+
+    const subjectGroup = { subject, topics: [] };
+
+    subject.topics.forEach(topic => {
+      const topicGroup = { topic, subtopics: [] };
+
+      topic.subtopics.forEach(sub => {
+        sub.priority = normalizePriority(sub.priority);
+
+        const status = getSubStatus(sub, now);
+        const reviewLabel = `R${Number(sub.currentLevel) || 0}`;
+
+        const errorSearchLabel = Number(sub.errorCount || 0) > 0 ? 'erro erros caderno dificuldade ponto fraco' : '';
+        const matchesSearch = [
+          sub.name, topic.name, subject.name, ...(sub.tags || []),
+          sub.priority, status, reviewLabel, getPriorityTagLabel(sub.priority), errorSearchLabel
+        ].some(t => String(t || '').toLowerCase().includes(search));
+
+        const matchesPriority = !filters.priority || filters.priority === 'all' || sub.priority === filters.priority;
+        const matchesReview = !filters.review || filters.review === 'all' || reviewLabel === filters.review;
+        const matchesStatus = !filters.status || filters.status === 'all' || status === filters.status;
+        const matchesHighOnly = !filters.highOnly || sub.priority === 'Alta';
+
+        let matchesView = true;
+        const next = sub.nextReviewDate ? new Date(sub.nextReviewDate) : null;
+
+        if (view === 'today') {
+          matchesView = next && sameDay(next, now);
+        } else if (view === 'studyToday') {
+          const dailyIds = Array.isArray(filters.studyTodayIds) ? filters.studyTodayIds : null;
+          const isStudyCandidate = isDueTodayOrOverdue(sub, now) || isHighNotStarted(sub);
+          matchesView = dailyIds ? dailyIds.includes(sub.id) && isStudyCandidate : isStudyCandidate;
+        } else if (view === 'upcoming') {
+          matchesView = next && next.getTime() > now.getTime() && !sameDay(next, now);
+        } else if (view === 'overdue') {
+          matchesView = status === 'atrasado';
+        } else if (view === 'high') {
+          matchesView = sub.priority === 'Alta';
+        } else if (view === 'mastered') {
+          matchesView = Number(sub.currentLevel) >= 8;
+        } else if (view === 'finalMode') {
+          const level = Number(sub.currentLevel) || 0;
+          const hasSavedError = Array.isArray(filters.errorTopicKeys)
+            ? filters.errorTopicKeys.includes(`${subject.name}|||${topic.name}`.toLowerCase())
+            : false;
+          matchesView = Number(sub.currentLevel) < 8 && (
+            sub.priority === 'Alta' ||
+            status === 'atrasado' ||
+            level <= 2 ||
+            hasSavedError
+          );
+        }
+
+        if (matchesSearch && matchesPriority && matchesReview && matchesStatus && matchesHighOnly && matchesView) {
+          // Não cria cópia com {...sub}: o botão Revisado precisa alterar o objeto original.
+          sub.status = status;
+          sub.reviewLabel = reviewLabel;
+          topicGroup.subtopics.push(sub);
+        }
+      });
+
+      if (topicGroup.subtopics.length) subjectGroup.topics.push(topicGroup);
+    });
+
+    if (subjectGroup.topics.length) groups.push(subjectGroup);
+  });
+
+  return groups;
+}
+
+// services/storage.js
+const STORAGE_KEY = 'apex_enem_v3_state';
+const LEGACY_STORAGE_KEY = 'apex_enem_v2_state';
+const PROGRESS_KEY = STORAGE_KEY + '_progress';
+const LEGACY_PROGRESS_KEY = LEGACY_STORAGE_KEY + '_progress';
+const HISTORY_KEY = STORAGE_KEY + '_history';
+const LEGACY_HISTORY_KEY = LEGACY_STORAGE_KEY + '_history';
+const OPEN_TOPICS_KEY = STORAGE_KEY + '_open_topics';
+const DAILY_QUEUE_KEY = STORAGE_KEY + '_daily_review_queue';
+const ERROR_NOTES_KEY = STORAGE_KEY + '_error_notes';
+const SIMULATIONS_KEY = STORAGE_KEY + '_simulations';
+
+function safeGet(key, fallback = null) {
+  try {
+    const raw = localStorage.getItem(key);
+    return raw ? JSON.parse(raw) : fallback;
+  } catch (_) {
+    return fallback;
+  }
+}
+
+function safeSet(key, value) {
+  try {
+    localStorage.setItem(key, JSON.stringify(value));
+  } catch (_) {}
+}
+
+function saveAppState(state) {
+  safeSet(STORAGE_KEY, state);
+}
+
+function loadAppState() {
+  return safeGet(STORAGE_KEY, null) || safeGet(LEGACY_STORAGE_KEY, null);
+}
+
+function loadProgress() {
+  return safeGet(PROGRESS_KEY, {}) || safeGet(LEGACY_PROGRESS_KEY, {}) || {};
+}
+
+function saveProgressMap(map) {
+  safeSet(PROGRESS_KEY, map || {});
+}
+
+function loadHistory() {
+  return safeGet(HISTORY_KEY, {}) || safeGet(LEGACY_HISTORY_KEY, {}) || {};
+}
+
+function saveHistoryMap(map) {
+  safeSet(HISTORY_KEY, map || {});
+}
+
+function generateKey(subjectName, topicName, subName) {
+  return `${subjectName || ''}|||${topicName || ''}|||${subName || ''}`.toLowerCase().trim();
+}
+
+function setSubProgress(subjectName, topicName, subName, data) {
+  const map = loadProgress();
+  map[generateKey(subjectName, topicName, subName)] = data;
+  saveProgressMap(map);
+}
+
+function getSubProgress(subjectName, topicName, subName) {
+  const map = loadProgress();
+  return map[generateKey(subjectName, topicName, subName)] || null;
+}
+
+function deleteSubProgress(subjectName, topicName, subName) {
+  const map = loadProgress();
+  const key = generateKey(subjectName, topicName, subName);
+
+  if (map[key]) {
+    delete map[key];
+    saveProgressMap(map);
+  }
+}
+
+function pushSubSnapshot(subjectName, topicName, subName, snapshot) {
+  const map = loadHistory();
+  const key = generateKey(subjectName, topicName, subName);
+  map[key] = map[key] || [];
+  map[key].push(snapshot);
+  saveHistoryMap(map);
+}
+
+function popSubSnapshot(subjectName, topicName, subName) {
+  const map = loadHistory();
+  const key = generateKey(subjectName, topicName, subName);
+
+  if (!map[key] || !map[key].length) return null;
+
+  const v = map[key].pop();
+  saveHistoryMap(map);
+  return v;
+}
+
+function peekSubSnapshot(subjectName, topicName, subName) {
+  const map = loadHistory();
+  const key = generateKey(subjectName, topicName, subName);
+
+  if (!map[key] || !map[key].length) return null;
+
+  return map[key][map[key].length - 1];
+}
+
+function clearSubHistory(subjectName, topicName, subName) {
+  const map = loadHistory();
+  const key = generateKey(subjectName, topicName, subName);
+
+  if (map[key]) {
+    delete map[key];
+    saveHistoryMap(map);
+  }
+}
+
+function loadOpenTopics() {
+  const arr = safeGet(OPEN_TOPICS_KEY, []);
+  return Array.isArray(arr) ? arr : [];
+}
+
+function saveOpenTopics(keys) {
+  const arr = Array.isArray(keys) ? keys : Array.from(keys || []);
+  safeSet(OPEN_TOPICS_KEY, arr);
+}
+
+function loadDailyReviewQueue() {
+  const queue = safeGet(DAILY_QUEUE_KEY, null);
+  return queue && typeof queue === 'object' ? queue : null;
+}
+
+function saveDailyReviewQueue(queue) {
+  safeSet(DAILY_QUEUE_KEY, queue || null);
+}
+
+function clearDailyReviewQueue() {
+  try {
+    localStorage.removeItem(DAILY_QUEUE_KEY);
+  } catch (_) {}
+}
+
+
+function loadErrorNotes() {
+  const notes = safeGet(ERROR_NOTES_KEY, []);
+  return Array.isArray(notes) ? notes : [];
+}
+
+function saveErrorNotes(notes) {
+  safeSet(ERROR_NOTES_KEY, Array.isArray(notes) ? notes : []);
+}
+
+function addErrorNote(note) {
+  const notes = loadErrorNotes();
+  notes.unshift(note);
+  saveErrorNotes(notes);
+  return note;
+}
+
+function deleteErrorNote(noteId) {
+  const notes = loadErrorNotes().filter(note => note.id !== noteId);
+  saveErrorNotes(notes);
+}
+
+function clearErrorNotes() {
+  try {
+    localStorage.removeItem(ERROR_NOTES_KEY);
+  } catch (_) {}
+}
+
+
+
+
+function loadSimulations() {
+  const simulations = safeGet(SIMULATIONS_KEY, []);
+  return Array.isArray(simulations) ? simulations : [];
+}
+
+function saveSimulations(simulations) {
+  safeSet(SIMULATIONS_KEY, Array.isArray(simulations) ? simulations : []);
+}
+
+function addSimulation(simulation) {
+  const simulations = loadSimulations();
+  simulations.unshift(simulation);
+  saveSimulations(simulations);
+  return simulation;
+}
+
+function deleteSimulation(simulationId) {
+  saveSimulations(loadSimulations().filter(sim => sim.id !== simulationId));
+}
+
+
+function clearAll() {
+  try {
+    localStorage.removeItem(STORAGE_KEY);
+    localStorage.removeItem(PROGRESS_KEY);
+    localStorage.removeItem(HISTORY_KEY);
+    localStorage.removeItem(OPEN_TOPICS_KEY);
+    localStorage.removeItem(DAILY_QUEUE_KEY);
+    localStorage.removeItem(ERROR_NOTES_KEY);
+    localStorage.removeItem(SIMULATIONS_KEY);
+  } catch (_) {}
+}
+
+const storage = Object.freeze({
+  saveAppState: saveAppState,
+  loadAppState: loadAppState,
+  loadProgress: loadProgress,
+  saveProgressMap: saveProgressMap,
+  loadHistory: loadHistory,
+  saveHistoryMap: saveHistoryMap,
+  generateKey: generateKey,
+  setSubProgress: setSubProgress,
+  getSubProgress: getSubProgress,
+  deleteSubProgress: deleteSubProgress,
+  pushSubSnapshot: pushSubSnapshot,
+  popSubSnapshot: popSubSnapshot,
+  peekSubSnapshot: peekSubSnapshot,
+  clearSubHistory: clearSubHistory,
+  loadOpenTopics: loadOpenTopics,
+  saveOpenTopics: saveOpenTopics,
+  loadDailyReviewQueue: loadDailyReviewQueue,
+  saveDailyReviewQueue: saveDailyReviewQueue,
+  clearDailyReviewQueue: clearDailyReviewQueue,
+  loadErrorNotes: loadErrorNotes,
+  saveErrorNotes: saveErrorNotes,
+  addErrorNote: addErrorNote,
+  deleteErrorNote: deleteErrorNote,
+  clearErrorNotes: clearErrorNotes,
+  loadSimulations: loadSimulations,
+  saveSimulations: saveSimulations,
+  addSimulation: addSimulation,
+  deleteSimulation: deleteSimulation,
+  clearAll: clearAll
+});
+
+// components/card.js
+function priorityClass(priority) {
+  const p = normalizePriority(priority);
+  if (p === 'Alta') return 'priority-alta';
+  if (p === 'Média') return 'priority-media';
+  if (p === 'Baixa') return 'priority-baixa';
+  return 'priority-muito-baixa';
+}
+
+function esc(str) {
+  return String(str ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+function fmtDate(isoStr) {
+  if (!isoStr) return '—';
+  const d = new Date(isoStr);
+  if (Number.isNaN(d.getTime())) return '—';
+  return d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+}
+
+function fmtDateTime(isoStr) {
+  if (!isoStr) return '—';
+  const d = new Date(isoStr);
+  if (Number.isNaN(d.getTime())) return '—';
+  return d.toLocaleString('pt-BR', {
+    day: '2-digit',
+    month: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
+
+function nextDateClass(sub) {
+  if (!sub.nextReviewDate || Number(sub.currentLevel) >= 8) return '';
+  const now = new Date();
+  const next = new Date(sub.nextReviewDate);
+  const todayStart = new Date(now);
+  todayStart.setHours(0, 0, 0, 0);
+  const nextStart = new Date(next);
+  nextStart.setHours(0, 0, 0, 0);
+  return nextStart.getTime() < todayStart.getTime() ? 'overdue' : '';
+}
+
+function createCardElement(sub, subject, topic, handlers = {}) {
+  const el = document.createElement('article');
+  el.className = 'study-card';
+  el.dataset.subId = sub.id || '';
+
+  if (sub && sub.highlight) el.classList.add('highlight');
+  if (sub && sub.priority) el.dataset.priority = normalizePriority(sub.priority);
+
+  const prioLabel = normalizePriority(sub.priority || 'Média');
+  const enemLabel = getPriorityTagLabel(prioLabel);
+  const tags = sanitizeTags(sub.tags || [enemLabel], prioLabel);
+  const extraTags = tags.filter(t => t.toLowerCase() !== enemLabel.toLowerCase());
+  const focusHtml = sub && sub.highlight ? `<span class="card-tag focus">Foco ENEM</span>` : '';
+  const level = Number(sub.currentLevel) || 0;
+  const isMastered = level >= 8;
+  const nextClass = nextDateClass(sub);
+
+  el.innerHTML = `
+    <div class="card-meta">
+      <div class="card-tags">
+        <span class="card-tag ${priorityClass(prioLabel)}">${esc(prioLabel)}</span>
+        <span class="card-tag status">R${level}</span>
+        <span class="card-tag enem">${esc(enemLabel)}</span>
+        ${focusHtml}
+        ${extraTags.map(t => `<span class="card-tag card-tag-extra">${esc(t)}</span>`).join('')}
+      </div>
+      <h4>${esc(sub.name)}</h4>
+      <p><strong>${esc(subject.name)}</strong> · ${esc(topic.name)}</p>
+    </div>
+
+    <div class="card-dates">
+      <div class="date-card">
+        <span>Status</span>
+        <strong>${esc(sub.status || 'não iniciado')}</strong>
+      </div>
+      <div class="date-card">
+        <span>Nível</span>
+        <strong>R${level}${isMastered ? ' · Dominado' : ''}</strong>
+      </div>
+      <div class="date-card">
+        <span>Última revisão</span>
+        <strong class="${sub.lastReviewed ? '' : 'card-date-muted'}">${fmtDate(sub.lastReviewed)}</strong>
+      </div>
+      <div class="date-card">
+        <span>Próxima revisão</span>
+        <strong class="${nextClass || (!sub.nextReviewDate ? 'card-date-muted' : '')}">${isMastered ? 'Dominado' : fmtDate(sub.nextReviewDate)}</strong>
+      </div>
+    </div>
+
+    <div class="card-actions">
+      <button class="btn btn-success btn-mark" type="button">${isMastered ? 'Dominado' : 'Revisado'}</button>
+      <button class="btn btn-soft btn-undo" type="button">Desfazer</button>
+      <button class="btn btn-soft btn-error-note" type="button">Registrar erro</button>
+      <button class="btn btn-soft btn-edit" type="button">Editar</button>
+      <button class="btn btn-danger btn-delete" type="button">Excluir</button>
+    </div>
+  `;
+
+  const markBtn = el.querySelector('.btn-mark');
+  const undoBtn = el.querySelector('.btn-undo');
+  const errorBtn = el.querySelector('.btn-error-note');
+  const editBtn = el.querySelector('.btn-edit');
+  const deleteBtn = el.querySelector('.btn-delete');
+
+  markBtn?.addEventListener('click', () => handlers.markReviewed && handlers.markReviewed(sub, subject, topic, el));
+  undoBtn?.addEventListener('click', () => handlers.undoReview && handlers.undoReview(sub, subject, topic, el));
+  errorBtn?.addEventListener('click', () => handlers.openErrorNote && handlers.openErrorNote({ subject, topic, sub }));
+  editBtn?.addEventListener('click', () => handlers.openEdit && handlers.openEdit(sub, subject, topic));
+  deleteBtn?.addEventListener('click', () => handlers.deleteSub && handlers.deleteSub(sub, subject, topic));
+
+  try {
+    if (markBtn && sub && sub.nextReviewDate && !isMastered) {
+      const now = new Date();
+      const next = new Date(sub.nextReviewDate);
+      const todayStart = new Date(now);
+      todayStart.setHours(0, 0, 0, 0);
+      const nextStart = new Date(next);
+      nextStart.setHours(0, 0, 0, 0);
+
+      if (nextStart.getTime() > todayStart.getTime()) {
+        markBtn.disabled = true;
+        markBtn.title = `Próxima revisão: ${fmtDateTime(sub.nextReviewDate)}`;
+        markBtn.classList.add('disabled');
+      }
+    }
+  } catch (_) {}
+
+  return el;
+}
+
+// data/seedData.js
+// Seed data: Completo e estruturado de acordo com a incidência do ENEM
+const seedData = [
+  // ==========================================
+  // 1. ELETRODINÂMICA (~21%)
+  // ==========================================
+  // 🔥 Prioridade máxima
+  { subject: 'Física', topic: 'Eletrodinâmica', topicWeight: '21%', priority: 'Alta', title: 'Corrente elétrica', currentLevel: 0, status: 'Não iniciado', nextRevisionDate: null },
+  { subject: 'Física', topic: 'Eletrodinâmica', topicWeight: '21%', priority: 'Alta', title: 'Tensão (DDP)', currentLevel: 0, status: 'Não iniciado', nextRevisionDate: null },
+  { subject: 'Física', topic: 'Eletrodinâmica', topicWeight: '21%', priority: 'Alta', title: 'Potência elétrica', currentLevel: 0, status: 'Não iniciado', nextRevisionDate: null },
+  { subject: 'Física', topic: 'Eletrodinâmica', topicWeight: '21%', priority: 'Alta', title: 'Energia elétrica', currentLevel: 0, status: 'Não iniciado', nextRevisionDate: null },
+  { subject: 'Física', topic: 'Eletrodinâmica', topicWeight: '21%', priority: 'Alta', title: 'Lei de Ohm', currentLevel: 0, status: 'Não iniciado', nextRevisionDate: null },
+  { subject: 'Física', topic: 'Eletrodinâmica', topicWeight: '21%', priority: 'Alta', title: 'Potência no resistor', currentLevel: 0, status: 'Não iniciado', nextRevisionDate: null },
+  { subject: 'Física', topic: 'Eletrodinâmica', topicWeight: '21%', priority: 'Alta', title: 'Associação de resistores em série', currentLevel: 0, status: 'Não iniciado', nextRevisionDate: null },
+  { subject: 'Física', topic: 'Eletrodinâmica', topicWeight: '21%', priority: 'Alta', title: 'Associação de resistores em paralelo', currentLevel: 0, status: 'Não iniciado', nextRevisionDate: null },
+  { subject: 'Física', topic: 'Eletrodinâmica', topicWeight: '21%', priority: 'Alta', title: 'Associação mista de resistores', currentLevel: 0, status: 'Não iniciado', nextRevisionDate: null },
+  { subject: 'Física', topic: 'Eletrodinâmica', topicWeight: '21%', priority: 'Alta', title: 'Revisão de eletrodinâmica', currentLevel: 0, status: 'Não iniciado', nextRevisionDate: null },
+  
+  // 🔥 Estude depois
+  { subject: 'Física', topic: 'Eletrodinâmica', topicWeight: '21%', priority: 'Média', title: 'Carga elétrica', currentLevel: 0, status: 'Não iniciado', nextRevisionDate: null },
+  { subject: 'Física', topic: 'Eletrodinâmica', topicWeight: '21%', priority: 'Média', title: 'Segunda Lei de Ohm (resistividade)', currentLevel: 0, status: 'Não iniciado', nextRevisionDate: null },
+  { subject: 'Física', topic: 'Eletrodinâmica', topicWeight: '21%', priority: 'Média', title: 'Amperímetro e voltímetro', currentLevel: 0, status: 'Não iniciado', nextRevisionDate: null },
+  { subject: 'Física', topic: 'Eletrodinâmica', topicWeight: '21%', priority: 'Média', title: 'Leis de Kirchhoff (básico)', currentLevel: 0, status: 'Não iniciado', nextRevisionDate: null },
+  
+  // ✅ Só ver superficialmente
+  { subject: 'Física', topic: 'Eletrodinâmica', topicWeight: '21%', priority: 'Baixa', title: 'Geradores elétricos', currentLevel: 0, status: 'Não iniciado', nextRevisionDate: null },
+  { subject: 'Física', topic: 'Eletrodinâmica', topicWeight: '21%', priority: 'Baixa', title: 'Associação de geradores', currentLevel: 0, status: 'Não iniciado', nextRevisionDate: null },
+  { subject: 'Física', topic: 'Eletrodinâmica', topicWeight: '21%', priority: 'Baixa', title: 'Circuito gerador-resistor', currentLevel: 0, status: 'Não iniciado', nextRevisionDate: null },
+  { subject: 'Física', topic: 'Eletrodinâmica', topicWeight: '21%', priority: 'Baixa', title: 'Receptores elétricos', currentLevel: 0, status: 'Não iniciado', nextRevisionDate: null },
+  { subject: 'Física', topic: 'Eletrodinâmica', topicWeight: '21%', priority: 'Baixa', title: 'Geradores + receptores + resistores', currentLevel: 0, status: 'Não iniciado', nextRevisionDate: null },
+  
+  // ❌ Só estudar se sobrar MUITO tempo
+  { subject: 'Física', topic: 'Eletrodinâmica', topicWeight: '21%', priority: 'Muito Baixa', title: 'Ponte de Wheatstone', currentLevel: 0, status: 'Não iniciado', nextRevisionDate: null },
+  { subject: 'Física', topic: 'Eletrodinâmica', topicWeight: '21%', priority: 'Muito Baixa', title: 'Capacitores', currentLevel: 0, status: 'Não iniciado', nextRevisionDate: null },
+  { subject: 'Física', topic: 'Eletrodinâmica', topicWeight: '21%', priority: 'Muito Baixa', title: 'Associação de capacitores', currentLevel: 0, status: 'Não iniciado', nextRevisionDate: null },
+  { subject: 'Física', topic: 'Eletrodinâmica', topicWeight: '21%', priority: 'Muito Baixa', title: 'Demonstração de fórmulas', currentLevel: 0, status: 'Não iniciado', nextRevisionDate: null },
+  { subject: 'Física', topic: 'Eletrodinâmica', topicWeight: '21%', priority: 'Muito Baixa', title: 'Exercícios avançados de Kirchhoff', currentLevel: 0, status: 'Não iniciado', nextRevisionDate: null },
+
+  // ==========================================
+  // 2. TERMOLOGIA + CALORIMETRIA (~16%)
+  // ==========================================
+  // 🔥 Prioridade máxima
+  { subject: 'Física', topic: 'Termologia + Calorimetria', topicWeight: '16%', priority: 'Alta', title: 'Conceitos fundamentais', currentLevel: 0, status: 'Não iniciado', nextRevisionDate: null },
+  { subject: 'Física', topic: 'Termologia + Calorimetria', topicWeight: '16%', priority: 'Alta', title: 'Escalas térmicas (Celsius, Fahrenheit, Kelvin)', currentLevel: 0, status: 'Não iniciado', nextRevisionDate: null },
+  { subject: 'Física', topic: 'Termologia + Calorimetria', topicWeight: '16%', priority: 'Alta', title: 'Quantidade de calor e calor específico', currentLevel: 0, status: 'Não iniciado', nextRevisionDate: null },
+  { subject: 'Física', topic: 'Termologia + Calorimetria', topicWeight: '16%', priority: 'Alta', title: 'Calor latente', currentLevel: 0, status: 'Não iniciado', nextRevisionDate: null },
+  { subject: 'Física', topic: 'Termologia + Calorimetria', topicWeight: '16%', priority: 'Alta', title: 'Trocas de calor sem mudança de fase', currentLevel: 0, status: 'Não iniciado', nextRevisionDate: null },
+  { subject: 'Física', topic: 'Termologia + Calorimetria', topicWeight: '16%', priority: 'Alta', title: 'Trocas de calor com mudança de fase', currentLevel: 0, status: 'Não iniciado', nextRevisionDate: null },
+  { subject: 'Física', topic: 'Termologia + Calorimetria', topicWeight: '16%', priority: 'Alta', title: 'Mudanças de estado', currentLevel: 0, status: 'Não iniciado', nextRevisionDate: null },
+  { subject: 'Física', topic: 'Termologia + Calorimetria', topicWeight: '16%', priority: 'Alta', title: 'Propagação de calor — condução', currentLevel: 0, status: 'Não iniciado', nextRevisionDate: null },
+  { subject: 'Física', topic: 'Termologia + Calorimetria', topicWeight: '16%', priority: 'Alta', title: 'Propagação de calor — convecção e irradiação', currentLevel: 0, status: 'Não iniciado', nextRevisionDate: null },
+  
+  // 🔥 Estude depois
+  { subject: 'Física', topic: 'Termologia + Calorimetria', topicWeight: '16%', priority: 'Média', title: 'Dilatação térmica dos sólidos', currentLevel: 0, status: 'Não iniciado', nextRevisionDate: null },
+  { subject: 'Física', topic: 'Termologia + Calorimetria', topicWeight: '16%', priority: 'Média', title: 'Dilatação térmica dos líquidos', currentLevel: 0, status: 'Não iniciado', nextRevisionDate: null },
+  { subject: 'Física', topic: 'Termologia + Calorimetria', topicWeight: '16%', priority: 'Média', title: 'Transformações gasosas', currentLevel: 0, status: 'Não iniciado', nextRevisionDate: null },
+  { subject: 'Física', topic: 'Termologia + Calorimetria', topicWeight: '16%', priority: 'Média', title: 'Equação geral dos gases', currentLevel: 0, status: 'Não iniciado', nextRevisionDate: null },
+  { subject: 'Física', topic: 'Termologia + Calorimetria', topicWeight: '16%', priority: 'Média', title: '1ª Lei da Termodinâmica', currentLevel: 0, status: 'Não iniciado', nextRevisionDate: null },
+  { subject: 'Física', topic: 'Termologia + Calorimetria', topicWeight: '16%', priority: 'Média', title: 'Máquinas térmicas', currentLevel: 0, status: 'Não iniciado', nextRevisionDate: null },
+  
+  // ✅ Só ver superficialmente
+  { subject: 'Física', topic: 'Termologia + Calorimetria', topicWeight: '16%', priority: 'Baixa', title: 'Energia interna dos gases', currentLevel: 0, status: 'Não iniciado', nextRevisionDate: null },
+  { subject: 'Física', topic: 'Termologia + Calorimetria', topicWeight: '16%', priority: 'Baixa', title: 'Trabalho nas transformações gasosas', currentLevel: 0, status: 'Não iniciado', nextRevisionDate: null },
+  { subject: 'Física', topic: 'Termologia + Calorimetria', topicWeight: '16%', priority: 'Baixa', title: 'Equação de Clapeyron', currentLevel: 0, status: 'Não iniciado', nextRevisionDate: null },
+  { subject: 'Física', topic: 'Termologia + Calorimetria', topicWeight: '16%', priority: 'Baixa', title: 'Transformações adiabáticas', currentLevel: 0, status: 'Não iniciado', nextRevisionDate: null },
+  
+  // ❌ Só estudar se sobrar MUITO tempo
+  { subject: 'Física', topic: 'Termologia + Calorimetria', topicWeight: '16%', priority: 'Muito Baixa', title: 'Ciclo de Carnot', currentLevel: 0, status: 'Não iniciado', nextRevisionDate: null },
+  { subject: 'Física', topic: 'Termologia + Calorimetria', topicWeight: '16%', priority: 'Muito Baixa', title: '2ª Lei da Termodinâmica avançada', currentLevel: 0, status: 'Não iniciado', nextRevisionDate: null },
+  { subject: 'Física', topic: 'Termologia + Calorimetria', topicWeight: '16%', priority: 'Muito Baixa', title: 'Entropia', currentLevel: 0, status: 'Não iniciado', nextRevisionDate: null },
+
+  // ==========================================
+  // 3. ONDULATÓRIA (~14%)
+  // ==========================================
+  // 🔥 Prioridade máxima
+  { subject: 'Física', topic: 'Ondulatória', topicWeight: '14%', priority: 'Alta', title: 'Conceitos iniciais', currentLevel: 0, status: 'Não iniciado', nextRevisionDate: null },
+  { subject: 'Física', topic: 'Ondulatória', topicWeight: '14%', priority: 'Alta', title: 'Equação fundamental (v = fλ)', highlight: true, currentLevel: 0, status: 'Não iniciado', nextRevisionDate: null },
+  { subject: 'Física', topic: 'Ondulatória', topicWeight: '14%', priority: 'Alta', title: 'Reflexão e refração de ondas', highlight: true, currentLevel: 0, status: 'Não iniciado', nextRevisionDate: null },
+  { subject: 'Física', topic: 'Ondulatória', topicWeight: '14%', priority: 'Alta', title: 'Som no cotidiano / interpretação', highlight: true, currentLevel: 0, status: 'Não iniciado', nextRevisionDate: null },
+  { subject: 'Física', topic: 'Ondulatória', topicWeight: '14%', priority: 'Alta', title: 'Acústica — conceitos fundamentais', currentLevel: 0, status: 'Não iniciado', nextRevisionDate: null },
+  { subject: 'Física', topic: 'Ondulatória', topicWeight: '14%', priority: 'Alta', title: 'Timbre, altura e nível sonoro', currentLevel: 0, status: 'Não iniciado', nextRevisionDate: null },
+  { subject: 'Física', topic: 'Ondulatória', topicWeight: '14%', priority: 'Alta', title: 'Efeito Doppler (ambulância/sirene)', highlight: true, currentLevel: 0, status: 'Não iniciado', nextRevisionDate: null },
+  
+  // 🔥 Estude depois
+  { subject: 'Física', topic: 'Ondulatória', topicWeight: '14%', priority: 'Média', title: 'Ondas eletromagnéticas', currentLevel: 0, status: 'Não iniciado', nextRevisionDate: null },
+  { subject: 'Física', topic: 'Ondulatória', topicWeight: '14%', priority: 'Média', title: 'Tsunami / aplicações do som', highlight: true, currentLevel: 0, status: 'Não iniciado', nextRevisionDate: null },
+  { subject: 'Física', topic: 'Ondulatória', topicWeight: '14%', priority: 'Média', title: 'Interferência', currentLevel: 0, status: 'Não iniciado', nextRevisionDate: null },
+  { subject: 'Física', topic: 'Ondulatória', topicWeight: '14%', priority: 'Média', title: 'Ressonância', currentLevel: 0, status: 'Não iniciado', nextRevisionDate: null },
+  
+  // ✅ Só ver superficialmente
+  { subject: 'Física', topic: 'Ondulatória', topicWeight: '14%', priority: 'Baixa', title: 'Cordas sonoras', currentLevel: 0, status: 'Não iniciado', nextRevisionDate: null },
+  { subject: 'Física', topic: 'Ondulatória', topicWeight: '14%', priority: 'Baixa', title: 'Tubos sonoros', currentLevel: 0, status: 'Não iniciado', nextRevisionDate: null },
+  { subject: 'Física', topic: 'Ondulatória', topicWeight: '14%', priority: 'Baixa', title: 'Difração', currentLevel: 0, status: 'Não iniciado', nextRevisionDate: null },
+  
+  // ❌ Só estudar se sobrar MUITO tempo
+  { subject: 'Física', topic: 'Ondulatória', topicWeight: '14%', priority: 'Muito Baixa', title: 'Polarização', currentLevel: 0, status: 'Não iniciado', nextRevisionDate: null },
+  { subject: 'Física', topic: 'Ondulatória', topicWeight: '14%', priority: 'Muito Baixa', title: 'Experimento de Young', currentLevel: 0, status: 'Não iniciado', nextRevisionDate: null },
+  { subject: 'Física', topic: 'Ondulatória', topicWeight: '14%', priority: 'Muito Baixa', title: 'MHS (Movimento Harmônico Simples)', currentLevel: 0, status: 'Não iniciado', nextRevisionDate: null },
+  { subject: 'Física', topic: 'Ondulatória', topicWeight: '14%', priority: 'Muito Baixa', title: 'Equação de Taylor em cordas', currentLevel: 0, status: 'Não iniciado', nextRevisionDate: null }
+];
+
+
+// main.js
 /**
  * ApexENEM • main.js
  * Melhorias adicionadas:
@@ -15,19 +676,6 @@
  * - Limpeza segura com backup automático
  * - Manual interno
  */
-
-import seedData from './data/seedData.js';
-import * as storage from './services/storage.js';
-import {
-  filterSubjects,
-  sanitizeTags,
-  getPriorityTagLabel,
-  normalizePriority,
-  getSubStatus,
-  isDueTodayOrOverdue,
-  isHighNotStarted,
-} from './utils/filters.js';
-import { createCardElement } from './components/card.js';
 
 // ─────────────────────────────────────────────────────────────
 // CSS GLOBAL — injetado uma única vez
